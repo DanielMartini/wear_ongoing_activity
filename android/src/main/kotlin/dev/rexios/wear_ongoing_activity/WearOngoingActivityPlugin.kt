@@ -28,6 +28,7 @@ class WearOngoingActivityPlugin :
 
     private var applicationContext: Context? = null
     private var bound = false
+    private var unexpectedBinder: String? = null
 
     private var ongoingActivityService: OngoingActivityService? = null
     private val ongoingActivityServiceConnection =
@@ -42,6 +43,9 @@ class WearOngoingActivityPlugin :
                 // loaded by another class loader) leaves the plugin unavailable
                 // instead of crashing the app.
                 val binder = service as? OngoingActivityService.LocalBinder
+                // The mismatch only shows up on real devices, so the offending type
+                // has to travel back to Dart to be reportable.
+                unexpectedBinder = if (binder == null) service.javaClass.name else null
                 ongoingActivityService = binder?.ongoingActivityService
             }
 
@@ -77,6 +81,7 @@ class WearOngoingActivityPlugin :
         }
         applicationContext = null
         ongoingActivityService = null
+        unexpectedBinder = null
     }
 
     override fun onMethodCall(
@@ -89,8 +94,9 @@ class WearOngoingActivityPlugin :
             ongoingActivityService
                 ?: return result.error(
                     "service_unavailable",
-                    "OngoingActivityService is not bound",
-                    null,
+                    unexpectedBinder?.let { "OngoingActivityService bound with an unexpected binder: $it" }
+                        ?: "OngoingActivityService is not bound yet",
+                    unexpectedBinder,
                 )
 
         when (call.method) {

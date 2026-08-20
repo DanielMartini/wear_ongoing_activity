@@ -8,6 +8,8 @@ Fork de Padel'em sobre el tag 0.1.7 de upstream.
 - Los metodos del canal devuelven `service_unavailable` en vez de lanzar NPE
   cuando el bind todavia no ha llegado (o no ha llegado nunca).
 - `onDetachedFromEngine` deshace el bind del engine que se destruye.
+- Si el binder no es el nuestro se guarda el nombre real de la clase y viaja
+  en el error del canal, para poder verlo en los no-fatales de la app.
 
 ## 0.1.7
 
