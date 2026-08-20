@@ -1,3 +1,14 @@
+## 0.1.7+1
+
+Fork de Padel'em sobre el tag 0.1.7 de upstream.
+
+- El cast del IBinder a `LocalBinder` en `onServiceConnected` pasa a ser seguro:
+  antes un binder inesperado mataba el proceso con `ClassCastException` desde un
+  callback del sistema, fuera del alcance de cualquier try/catch de Dart.
+- Los metodos del canal devuelven `service_unavailable` en vez de lanzar NPE
+  cuando el bind todavia no ha llegado (o no ha llegado nunca).
+- `onDetachedFromEngine` deshace el bind del engine que se destruye.
+
 ## 0.1.7
 
 - Updates minimum supported SDK version to Flutter 3.44/Dart 3.12.

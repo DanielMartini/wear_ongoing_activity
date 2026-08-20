@@ -26,6 +26,9 @@ class WearOngoingActivityPlugin :
     MethodCallHandler {
     private lateinit var channel: MethodChannel
 
+    private var applicationContext: Context? = null
+    private var bound = false
+
     private var ongoingActivityService: OngoingActivityService? = null
     private val ongoingActivityServiceConnection =
         object : ServiceConnection {
@@ -33,8 +36,13 @@ class WearOngoingActivityPlugin :
                 name: ComponentName,
                 service: IBinder,
             ) {
-                val binder = service as OngoingActivityService.LocalBinder
-                ongoingActivityService = binder.ongoingActivityService
+                // This callback runs on the main thread outside of any method channel
+                // handler, so an unchecked cast here takes down the whole process. A
+                // binder that is not ours (service hosted in another process, class
+                // loaded by another class loader) leaves the plugin unavailable
+                // instead of crashing the app.
+                val binder = service as? OngoingActivityService.LocalBinder
+                ongoingActivityService = binder?.ongoingActivityService
             }
 
             override fun onServiceDisconnected(name: ComponentName) {
@@ -47,27 +55,49 @@ class WearOngoingActivityPlugin :
         channel.setMethodCallHandler(this)
 
         val context = flutterPluginBinding.applicationContext
+        applicationContext = context
         val serviceIntent = Intent(context, OngoingActivityService::class.java)
         context.bindService(
             serviceIntent,
             ongoingActivityServiceConnection,
             Context.BIND_AUTO_CREATE,
         )
+        bound = true
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+
+        // The binding is made per engine and has to be released with it, otherwise
+        // every engine that ever attached keeps the service alive for the lifetime
+        // of the process.
+        if (bound) {
+            applicationContext?.unbindService(ongoingActivityServiceConnection)
+            bound = false
+        }
+        applicationContext = null
+        ongoingActivityService = null
     }
 
     override fun onMethodCall(
         call: MethodCall,
         result: Result,
     ) {
+        // bindService is asynchronous: Dart can call in before onServiceConnected
+        // has run, and the connection may never deliver our binder at all.
+        val service =
+            ongoingActivityService
+                ?: return result.error(
+                    "service_unavailable",
+                    "OngoingActivityService is not bound",
+                    null,
+                )
+
         when (call.method) {
-            "start" -> ongoingActivityService!!.start(call, result)
-            "isOngoing" -> ongoingActivityService!!.isOngoing(call, result)
-            "update" -> ongoingActivityService!!.update(call, result)
-            "stop" -> ongoingActivityService!!.stop(call, result)
+            "start" -> service.start(call, result)
+            "isOngoing" -> service.isOngoing(call, result)
+            "update" -> service.update(call, result)
+            "stop" -> service.stop(call, result)
             else -> return result.notImplemented()
         }
     }
